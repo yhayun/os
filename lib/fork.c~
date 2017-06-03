@@ -1,0 +1,342 @@
+// implement fork from user space
+
+#include <inc/string.h>
+#include <inc/lib.h>
+
+// PTE_COW marks copy-on-write page table entries.
+// It is one of the bits explicitly allocated to user processes (PTE_AVAIL).
+#define PTE_COW		0x800
+
+
+// Assembly language pgfault entrypoint defined in lib/pfentry.S.
+extern void _pgfault_upcall(void);
+
+//
+// Custom page fault handler - if faulting page is copy-on-write,
+// map in our own private writable copy.
+//
+static void
+pgfault(struct UTrapframe *utf)
+{
+	void *addr = (void *) utf->utf_fault_va;
+	uint32_t err = utf->utf_err;
+	int r;
+
+	// Check that the faulting access was (1) a write, and (2) to a
+	// copy-on-write page.  If not, panic.
+	// Hint:
+	//   Use the read-only page table mappings at uvpt
+	//   (see <inc/memlayout.h>).
+
+	// LAB 4: Your code here.
+	if( !((uvpt[PGNUM(addr)] & (PTE_P|PTE_COW)) && (uvpd[PDX(addr)] & PTE_P) && (err & FEC_WR)) ){
+		panic("user pagefault - PTE doesn't have appropriate COW flags - PTE: %d",uvpt[PGNUM(addr)]);
+	}
+
+	// Allocate a new page, map it at a temporary location (PFTEMP),
+	// copy the data from the old page to the new page, then move the new
+	// page to the old page's address.
+	// Hint:
+	//   You should make three system calls.
+
+	// LAB 4: Your code here.
+	int res;
+	addr = ROUNDDOWN(addr, PGSIZE);	
+	res = sys_page_alloc(0, (void *)PFTEMP, PTE_U | PTE_P| PTE_W);
+	if(res)
+		panic("COW failed - cannt alloc new page.");
+	memcpy((void *)PFTEMP, addr, PGSIZE);
+	sys_page_map(0, (void *)PFTEMP, 0, addr, PTE_U|PTE_P|PTE_W);
+	if(res)
+		panic("COW failed - cannt map new page.");
+	sys_page_unmap(0, (void *)PFTEMP);
+	
+}
+
+//
+// Map our virtual page pn (address pn*PGSIZE) into the target envid
+// at the same virtual address.  If the page is writable or copy-on-write,
+// the new mapping must be created copy-on-write, and then our mapping must be
+// marked copy-on-write as well.  (Exercise: Why do we need to mark ours
+// copy-on-write again if it was already copy-on-write at the beginning of
+// this function?)
+//
+// Returns: 0 on success, < 0 on error.
+// It is also OK to panic on error.
+//
+static int
+duppage(envid_t envid, unsigned pn)
+{
+	int r, perms;
+	// LAB 4: Your code here.
+	int pte = uvpt[pn];
+	perms = PTE_P|PTE_COW;
+	perms |= (pte & PTE_U);
+	
+	// LAB 5 Addition: (sharing):
+	if((pte & PTE_SHARE)){
+		//will put on default mappings with PTE_SYSCALL masking.
+		//map child:
+		r = sys_page_map(thisenv->env_id, (void*)(pn*PGSIZE) , envid, (void*)(pn*PGSIZE) , (pte & PTE_SYSCALL)) ;
+		if(r)
+			panic("duppage failed - map sharing gone wrong.");
+		return 0;
+	}
+
+	//before enabled sharing code:
+	if( ((pte & PTE_COW) || (pte & PTE_W))){
+		//map child:
+		r = sys_page_map(thisenv->env_id, (void*)(pn*PGSIZE) , envid, (void*)(pn*PGSIZE) , perms) ;
+		if(r)
+			panic("duppage failed - cannt map new page.");
+		//map parent
+		r = sys_page_map(thisenv->env_id, (void*)(pn*PGSIZE) , thisenv->env_id, (void*)(pn*PGSIZE) , perms) ;
+		if(r)
+			panic("duppage failed - cannt map new page.");
+	}else{
+		r = sys_page_map(thisenv->env_id, (void*)(pn*PGSIZE) , envid, (void*)(pn*PGSIZE) , PTE_P|(pte & PTE_U)) ;
+		if(r)
+			panic("duppage failed - cannt map new page.");
+	}	
+	return 0;
+}
+
+//
+// User-level fork with copy-on-write.
+// Set up our page fault handler appropriately.
+// Create a child.
+// Copy our address space and page fault handler setup to the child.
+// Then mark the child as runnable and return.
+//
+// Returns: child's envid to the parent, 0 to the child, < 0 on error.
+// It is also OK to panic on error.
+//
+// Hint:
+//   Use uvpd, uvpt, and duppage.
+//   Remember to fix "thisenv" in the child process.
+//   Neither user exception stack should ever be marked copy-on-write,
+//   so you must allocate a new page for the child's user exception stack.
+//
+envid_t
+fork(void)
+{
+	// LAB 4: Your code here.
+	int pn,res,pdx;
+	pte_t* pte;
+	set_pgfault_handler(pgfault);
+	uint32_t envid = sys_exofork();
+	if (envid < 0 )
+		panic("fork - exofork failed.");
+	if(envid == 0){ 
+	//child:
+		thisenv = &envs[ENVX(sys_getenvid())];
+		return 0;
+	}
+	//parent:
+	for (pn = 0; pn < PGNUM(UTOP - PGSIZE); pn++) {
+		pdx = ROUNDDOWN(pn, NPDENTRIES) / NPDENTRIES;
+		if ((uvpd[pdx] & PTE_P)  && ((uvpt[pn] & PTE_P) )) {
+				duppage(envid, pn);
+		}
+	}
+	res = sys_page_alloc(envid, (void *) (UXSTACKTOP - PGSIZE), PTE_P | PTE_U | PTE_W);
+	if(res < 0)
+		panic("fork failed to alloc page for exception stack.");
+	res = sys_env_set_pgfault_upcall(envid, _pgfault_upcall);
+	if(res < 0)
+		panic("fork failed to set childs handler.");
+
+	res = sys_env_set_status(envid, ENV_RUNNABLE);
+	if (res <0)
+		panic("fork failed to set child status.");
+	return envid;
+}
+
+// Challenge!
+int
+sfork(void)
+{
+	panic("sfork not implemented");
+	return -E_INVAL;
+}
+
+
+// exec from a program image loaded from the file system.
+// prog: the pathname of the program to run.
+// argv: pointer to null-terminated array of pointers to strings,
+// 	 which will be passed to the child as its command-line arguments.
+// Returns 0, < 0 on failure.
+int
+exec(const char *prog, const char **argv)
+{
+	unsigned char elf_buf[512];
+	struct Trapframe new_tf;
+
+	int fd, i, r;
+	struct Elf *elf;
+	struct Proghdr *ph;
+	int perm;
+
+	// This code follows this procedure:
+	//
+	//   - Open the program file.
+	//
+	//   - Read the ELF header, as you have before, and sanity check its
+	//     magic number.  (Check out your load_icode!)
+	//
+//   - Use sys_exofork() to create a new environment.
+	//
+	//   - Set child_tf to an initial struct Trapframe for the child.
+	//
+	//   - Call the init_stack() function above to set up
+	//     the initial stack page for the child environment.
+	//
+	//   - Map all of the program's segments that are of p_type
+	//     ELF_PROG_LOAD into the new environment's address space.
+	//     Use the p_flags field in the Proghdr for each segment
+	//     to determine how to map the segment:
+	//
+	//	* If the ELF flags do not include ELF_PROG_FLAG_WRITE,
+	//	  then the segment contains text and read-only data.
+	//	  Use read_map() to read the contents of this segment,
+	//	  and map the pages it returns directly into the child
+	//        so that multiple instances of the same program
+	//	  will share the same copy of the program text.
+	//        Be sure to map the program text read-only in the child.
+	//        Read_map is like read but returns a pointer to the data in
+	//        *blk rather than copying the data into another buffer.
+	//
+	//	* If the ELF segment flags DO include ELF_PROG_FLAG_WRITE,
+	//	  then the segment contains read/write data and bss.
+	//	  As with load_icode() in Lab 3, such an ELF segment
+	//	  occupies p_memsz bytes in memory, but only the FIRST
+	//	  p_filesz bytes of the segment are actually loaded
+	//	  from the executable file - you must clear the rest to zero.
+	//        For each page to be mapped for a read/write segment,
+	//        allocate a page in the parent temporarily at UTEMP,
+	//        read() the appropriate portion of the file into that page
+	//	  and/or use memset() to zero non-loaded portions.
+	//	  (You can avoid calling memset(), if you like, if
+	//	  page_alloc() returns zeroed pages already.)
+	//        Then insert the page mapping into the child.
+	//        Look at init_stack() for inspiration.
+	//        Be sure you understand why you can't use read_map() here.
+	//
+	//     Note: None of the segment addresses or lengths above
+	//     are guaranteed to be page-aligned, so you must deal with
+	//     these non-page-aligned values appropriately.
+	//     The ELF linker does, however, guarantee that no two segments
+	//     will overlap on the same page; and it guarantees that
+	//     PGOFF(ph->p_offset) == PGOFF(ph->p_va).
+	//
+	//   - Call sys_env_set_trapframe(child, &child_tf) to set up the
+	//     correct initial eip and esp values in the child.
+	//
+	//   - Start the child process running with sys_env_set_status().
+	if ((r = open(prog, O_RDONLY)) < 0)
+		return r;
+	fd = r;
+	
+	// Read elf header
+	elf = (struct Elf*) elf_buf;
+	if (readn(fd, elf_buf, sizeof(elf_buf)) != sizeof(elf_buf)
+	    || elf->e_magic != ELF_MAGIC) {
+		close(fd);
+		cprintf("elf magic %08x want %08x\n", elf->e_magic, ELF_MAGIC);
+		return -E_NOT_EXEC;
+	}
+	uint32_t tmp = ETEMP;
+	ph = (struct Proghdr*) (elf_buf + elf->e_phoff);
+	for (i = 0; i < elf->e_phnum; i++, ph++) {
+		if (ph->p_type != ELF_PROG_LOAD)
+			continue;
+		perm = PTE_P | PTE_U;
+		if (ph->p_flags & ELF_PROG_FLAG_WRITE)
+			perm |= PTE_W;
+		if ((r = map_segment(0, PGOFF(ph->p_va) + tmp, ph->p_memsz,
+				     fd, ph->p_filesz, ph->p_offset, perm)) < 0)
+			goto error;
+		tmp += ROUNDUP(ph->p_memsz + PGOFF(ph->p_va), PGSIZE);
+	}
+	close(fd);
+	fd = -1;
+
+	//places the new stack in UTEMP need to mape to correct place in sys_exec
+	if ((r = exec_init_stack(child, argv, &child_tf.tf_esp)) < 0)
+		return r;
+
+	return sys_exec ((uint32_t)elf->e_entry);	
+error:
+	sys_env_destroy(thisenv);
+	close(fd);
+	return r;
+}
+
+
+//same as init_Stack - except it doesnt change the mappings in the end, and leaves the
+//stack mappings on UTEMP for the exec system call to map to the correct place later.
+static int
+exec_init_stack(const char **argv, uintptr_t *init_esp)
+{
+	size_t string_size;
+	int argc, i, r;
+	char *string_store;
+	uintptr_t *argv_store;
+	envid_t child = thisenv;
+
+	// Count the number of arguments (argc)
+	// and the total amount of space needed for strings (string_size).
+	string_size = 0;
+	for (argc = 0; argv[argc] != 0; argc++)
+		string_size += strlen(argv[argc]) + 1;
+
+	// Determine where to place the strings and the argv array.
+	// Set up pointers into the temporary page 'UTEMP'; we'll map a page
+	// there later, then remap that page into the child environment
+	// at (USTACKTOP - PGSIZE).
+	// strings is the topmost thing on the stack.
+	string_store = (char*) UTEMP + PGSIZE - string_size;
+	// argv is below that.  There's one argument pointer per argument, plus
+	// a null pointer.
+	argv_store = (uintptr_t*) (ROUNDDOWN(string_store, 4) - 4 * (argc + 1));
+
+	// Make sure that argv, strings, and the 2 words that hold 'argc'
+	// and 'argv' themselves will all fit in a single stack page.
+	if ((void*) (argv_store - 2) < (void*) UTEMP)
+		return -E_NO_MEM;
+
+	// Allocate the single stack page at UTEMP.
+	if ((r = sys_page_alloc(0, (void*) UTEMP, PTE_P|PTE_U|PTE_W)) < 0)
+		return r;
+
+
+	//	* Initialize 'argv_store[i]' to point to argument string i,
+	//	  for all 0 <= i < argc.
+	//	  Also, copy the argument strings from 'argv' into the
+	//	  newly-allocated stack page.
+	//
+	//	* Set 'argv_store[argc]' to 0 to null-terminate the args array.
+	//
+	//	* Push two more words onto the child's stack below 'args',
+	//	  containing the argc and argv parameters to be passed
+	//	  to the child's umain() function.
+	//	  argv should be below argc on the stack.
+	//	  (Again, argv should use an address valid in the child's
+	//	  environment.)
+	//
+	//	* Set *init_esp to the initial stack pointer for the child,
+	//	  (Again, use an address valid in the child's environment.)
+	for (i = 0; i < argc; i++) {
+		argv_store[i] = UTEMP2USTACK(string_store);
+		strcpy(string_store, argv[i]);
+		string_store += strlen(argv[i]) + 1;
+	}
+	argv_store[argc] = 0;
+	assert(string_store == (char*)UTEMP + PGSIZE);
+
+	argv_store[-1] = UTEMP2USTACK(argv_store);
+	argv_store[-2] = argc;
+
+	*init_esp = UTEMP2USTACK(&argv_store[-2]);
+	return 0;
+}

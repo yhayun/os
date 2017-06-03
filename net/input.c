@@ -1,0 +1,36 @@
+
+#include "ns.h"
+#define BUFFER_SIZE 2048
+
+extern union Nsipc nsipcbuf;
+
+void
+input(envid_t ns_envid)
+{
+	binaryname = "ns_input";
+
+	// LAB 6: Your code here:
+	// 	- read a packet from the device driver
+	//	- send it to the network server
+	// Hint: When you IPC a page to the network server, it will be
+	// reading from it for a while, so don't immediately receive
+	// another packet in to the same physical page.
+
+	sys_page_alloc(0, (void *)UTEMP, PTE_P | PTE_U| PTE_W);
+	int res, size = 0;
+	for (;;){
+		while ( (res = sys_receive_packet((void *)(((union Nsipc *)UTEMP)->pkt.jp_data) ,&size)) < 0 ){	
+			//empty loop
+			//cprintf("WAKING UP \n\n");
+		}
+		if ((res = sys_page_alloc(0, &nsipcbuf, PTE_P | PTE_W | PTE_U)) < 0)
+			panic("input: unable to allocate new page, error %e\n", res);
+
+		memcpy(nsipcbuf.pkt.jp_data, ((union Nsipc *)UTEMP)->pkt.jp_data , size);
+		nsipcbuf.pkt.jp_len = size;
+		ipc_send(ns_envid, NSREQ_INPUT, &nsipcbuf, PTE_P | PTE_W | PTE_U);
+	}
+	panic("Shouldn't leave for loop! OMG");
+}
+
+

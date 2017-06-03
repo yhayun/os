@@ -1,0 +1,28 @@
+// Ping-pong a counter between two processes.
+// Only need to start one of these -- splits into two with fork.
+
+#include <inc/lib.h>
+
+void
+umain(int argc, char **argv)
+{
+	envid_t who;
+	int i;
+	int my_prio
+	for (i = 50; i >= 0; i--){
+		if ((who = fork()) == 0) {
+			sys_set_priority(i % MAX_PRIO);
+			my_prio = i % MAX_PRIO;
+			cprintf("my env id is %d, and i changes my priority to %d\n", sys_getenvid(), i);
+			cprintf("Going to yield the CPU now. BYE BYE\n");
+			goto stop;
+		}
+	}
+	if (who)
+		return;
+stop:
+	sys_yield();
+	cprintf("Good Morning. My id is %d, and my prio is %d",sys_getenvid(), i);
+	
+}
+

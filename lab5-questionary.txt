@@ -1,0 +1,77 @@
+=== This template file contains questions you need to answer.
+=== Fill your answers on appropriate blank lines only.
+=== Don't start any line with three equal signs "===".
+=== Don't edit any lines starting from three equal signs.
+=== Use C notation to write numbers: 42 for decimal, 0x2a for hexadecimal.
+=== We may check most of the answers automatically, so "forty two" or
+=== "26+16" won't work for this example. Spaces are mostly ignored, so
+=== "  42  " is OK (without quotes of course). 
+=== When asked to specify address & instruction, do it in the form of
+=== gdb output "ADDRESS: INSTRUCTION", for example "0x7c26:  or  $0x1,%eax"
+=== Don't make lines longer than 80 characters. You don't need to fit your
+=== answer in a single line, you can start a new line at will.
+=== However, when asked to fill "a table" make each table raw a single line.
+
+=== Q How much disk space can be addressed by a single bitmap block
+===   when size of a block is 4KB? (number in _bytes_)
+134217728
+
+=== Q How much disk space can be addressed by a single bitmap block
+===   when size of a block is 512B? (number in _bytes_)
+16777216
+
+=== Q What is a maximum supported file size in JOS FS? (number in _bytes_)
+4235264
+
+=== Q Did you have to do anything else to ensure that the I/O
+===   privilege setting is saved and restored properly when you
+===   subsequently switch from one environment to another? Why? 
+===   (free form)
+No, the way we designed the kernel is that only, running with CPL == 0 
+privilege We can change the EFLAGS registers, and when forking the EFLAGS
+register goes from father to son, so unless the fs env forks its self 
+(and its not ) then the file system env is the only env who can run with
+that privilege.
+
+=== Q How long approximately did it take you to do this lab?
+===   (number of hours for all partners combined)
+The lab itself - 14 hours (combined)
+The challenge - 6 hours (combined)
+====================================================================
+=== Q What challenge(s) have you chosen to implement? (specify
+===   challenge numbers separated by spaces, if more than one)
+3
+
+=== Q If the challenge requires changing the kernel source, list the
+===   files which you have changed/added during implementation.
+===   (one file per line, relative to lab directory containing .git/)
+kern/syscall.c
+inc/lib.h
+lib/spawn.c
+lib/syscall.c
+inc/syscall.h
+=== Q Describe you solution.
+===   (free form, up to 500 words, don't need to use all 500!)
+
+We have chosen to do the unix like exec challenge:
+
+In our solution we had to come up with a way to save the binary data
+And parameters given in argv our memory while cleaning the current 
+environment and loading a new one onto it.
+
+We had to load the binary from the file system and store it somewhere
+While we manage the environment setup for it. We decided to use a temp
+Memory region called EXEC_TEMP and UTEMP. The first used to store the
+Loaded binary parts from the file descriptor and the second is used as
+a temporary placement for our new stack, which is already holding the
+arguments for the binary we’re going to execute.
+
+In our solution we first loaded to binary to the temp region, and then
+We called a similar version of spawn’s ‘init_stack’ to set the new stack
+For the binary. After we set the information that the new env will need
+We called the system call sys_exec.
+Inside the system call we set the tf_eip to the binary entry point and
+Copy and stack and binary back into the current mappings of the incoming
+New env. After we set everything up and we call env_run so it will load
+The new env from the chosen entry point using the same process to run 
+The binary and a unix exec version would have done.
