@@ -262,7 +262,7 @@ struct rx_buf
 #define NUM_TRANS_DESC 16
 #define TRANS_DESC_SIZE sizeof(struct tx_desc) * NUM_TRANS_DESC
 #define TRANS_REC_SIZE sizeof(struct rx_desc) * NUM_REC_DESC
-
+#define ZERO_COPY_ENABLE 1
 
 
 //******************************************

@@ -256,13 +256,13 @@ struct tx_buf
 struct rx_buf
 {
 	char buf[BUFFER_SIZE];
-}__attribute__ ((aligned (PGSIZE)));
+};
 
 #define NUM_REC_DESC 128
 #define NUM_TRANS_DESC 16
 #define TRANS_DESC_SIZE sizeof(struct tx_desc) * NUM_TRANS_DESC
 #define TRANS_REC_SIZE sizeof(struct rx_desc) * NUM_REC_DESC
-
+#define ZERO_COPY_ENABLE 0
 
 
 //******************************************

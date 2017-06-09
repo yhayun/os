@@ -69,11 +69,12 @@ static void input_normal(envid_t ns_envid){
 static void input_zerocpy(envid_t ns_envid){
 	int res, size = 0;
 	struct jif_pkt* pkt;
-
+	zerocpy_rec(NULL);
 	for (;;){
 		size = zerocpy_rec((char**) &pkt);
+		cprintf("test: %d\n",size);
 		pkt->jp_len = size;
-		ipc_send(ns_envid, NSREQ_INPUT, pkt, PTE_P|PTE_U|PTE_W);
+		ipc_send(ns_envid, NSREQ_INPUT, (void *)((uint32_t)pkt - 2), PTE_P|PTE_U|PTE_W);cprintf("test2222222222: %d\n",size);
 	}
 	panic("Shouldn't leave for loop! OMG");
 }

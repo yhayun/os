@@ -103,9 +103,20 @@ static void init_receive(){
 	//Allocate a region of memory for the receive descriptor list:
 	memset(rx_desc_list, 0, sizeof(struct rx_desc) * NUM_REC_DESC);
 	int i;
-	for (i=0; i < NUM_REC_DESC; i++){
-		rx_desc_list[i].addr = PADDR(&rx_buffer[i]);
-	}
+	int num_pages = NUM_REC_DESC;
+	char *buf_base = (char*) zero_buf;
+	struct PageInfo* page;
+	void* va;
+	if (ZERO_COPY_ENABLE)
+		for (i = 0; i < num_pages; i++){
+			page =  page_alloc(ALLOC_ZERO);
+			//check if alloc fails.
+			rx_desc_list[i].addr = page2pa(page);
+		}
+	else
+		for (i=0; i < NUM_REC_DESC; i++){
+			rx_desc_list[i].addr = PADDR(&rx_buffer[i]);
+		}
 
 	//Set the Receive Descriptor Length
 	e1000[E1000_RDLEN] = TRANS_REC_SIZE; 
@@ -211,14 +222,12 @@ int zero_receive(char** package){
 	int size;
 
 	//flag to override the normal init if we get here the first time - (using zero copy).
-	static int initialized;
-	if (!initialized)
+	if (!package)
 	{
 		init_zero_copy_receive();
 		//next to we enter the function, we won't init again.
-		initialized = 1;
+		return 0;
 	}
-
 
 	int idx = ( e1000[E1000_RDT] + 1) % NUM_REC_DESC;
 	if( !(rx_desc_list[idx].status & E1000_RXD_STAT_DD) ){	
@@ -232,7 +241,7 @@ int zero_receive(char** package){
 	*package = (char*)(ZEROCOPY_BASE + idx * PGSIZE);
 	rx_desc_list[idx].status = 0;
 	e1000[E1000_RDT] = idx; // advance iterator TDT.
-cprintf("----first idx: %d , addr of pack: %x\n",idx,package);
+cprintf("----first idx: %d , addr of pack: %x\n",idx,**package);
 	return size;
 }
 
@@ -241,14 +250,11 @@ void init_zero_copy_receive(){
 	int num_pages = NUM_REC_DESC;
 	char *buf_base = (char*) zero_buf;
 	int i;
-	struct PageInfo* page;
 	void* va;
 	for (i = 0; i < num_pages; i++){
-		page =  page_alloc(PTE_P|PTE_U|PTE_W);
 		//check if alloc fails.
-		rx_desc_list[i].addr = page2pa(page);
 		va = (void*)(ZEROCOPY_BASE + i * PGSIZE);
-		if (page_insert(curenv->env_pgdir, page, va , PTE_P|PTE_U|PTE_W) < 0)
+		if (page_insert(curenv->env_pgdir, pa2page(rx_desc_list[i].addr), va , PTE_P|PTE_U|PTE_W) < 0)
 			panic("[e1000] init zerocpy");
 	}
 }
