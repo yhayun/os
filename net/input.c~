@@ -63,18 +63,21 @@ static void input_normal(envid_t ns_envid){
 }
 
 
-
+struct xxx{
+	int size;
+	char* pkt;
+};
 
 /**** ZERO COPY *****/
 static void input_zerocpy(envid_t ns_envid){
-	int res, size = 0;
+	int res, size = 0,i,t;
 	struct jif_pkt* pkt;
-	zerocpy_rec(NULL);
-	for (;;){
+	struct xxx x;
+	zerocpy_rec(NULL);//used to init zero copy buffers.
+	for (;;){ 
 		size = zerocpy_rec((char**) &pkt);
-		cprintf("test: %d\n",size);
 		pkt->jp_len = size;
-		ipc_send(ns_envid, NSREQ_INPUT, (void *)((uint32_t)pkt - 2), PTE_P|PTE_U|PTE_W);cprintf("test2222222222: %d\n",size);
+		ipc_send(ns_envid, NSREQ_INPUT, pkt, PTE_P|PTE_U|PTE_W);
 	}
 	panic("Shouldn't leave for loop! OMG");
 }

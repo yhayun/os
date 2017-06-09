@@ -1,5 +1,6 @@
 #include <kern/e1000.h>
 #include <kern/sched.h>
+
 // LAB 6: Your driver code here
 volatile uint32_t *e1000;
 
@@ -103,20 +104,20 @@ static void init_receive(){
 	//Allocate a region of memory for the receive descriptor list:
 	memset(rx_desc_list, 0, sizeof(struct rx_desc) * NUM_REC_DESC);
 	int i;
-	int num_pages = NUM_REC_DESC;
-	char *buf_base = (char*) zero_buf;
 	struct PageInfo* page;
-	void* va;
-	if (ZERO_COPY_ENABLE)
-		for (i = 0; i < num_pages; i++){
+
+	if (ZERO_COPY_ENABLE){
+		for (i = 0; i < NUM_REC_DESC; i++){
 			page =  page_alloc(ALLOC_ZERO);
-			//check if alloc fails.
-			rx_desc_list[i].addr = page2pa(page);
+			//we add sizeof(int) to reserve place for the packet size.
+			// this is done to match packet struct for the ipc_send;
+			rx_desc_list[i].addr = page2pa(page) + sizeof(int);
 		}
-	else
+	}else{
 		for (i=0; i < NUM_REC_DESC; i++){
 			rx_desc_list[i].addr = PADDR(&rx_buffer[i]);
 		}
+	}
 
 	//Set the Receive Descriptor Length
 	e1000[E1000_RDLEN] = TRANS_REC_SIZE; 
@@ -220,12 +221,8 @@ int receive_packet (void* container, int* size){
 //**********************************************************//
 int zero_receive(char** package){
 	int size;
-
-	//flag to override the normal init if we get here the first time - (using zero copy).
-	if (!package)
-	{
+	if (!package){
 		init_zero_copy_receive();
-		//next to we enter the function, we won't init again.
 		return 0;
 	}
 
@@ -239,22 +236,23 @@ int zero_receive(char** package){
 
 	size = rx_desc_list[idx].length;
 	*package = (char*)(ZEROCOPY_BASE + idx * PGSIZE);
+
+	//we put the size in the previously reserved space so it will look like jif_pkt struct!
+	// jif->size, jif->data:
+	*(*package) = size;
+
 	rx_desc_list[idx].status = 0;
 	e1000[E1000_RDT] = idx; // advance iterator TDT.
-cprintf("----first idx: %d , addr of pack: %x\n",idx,**package);
 	return size;
 }
 
 
 void init_zero_copy_receive(){
-	int num_pages = NUM_REC_DESC;
-	char *buf_base = (char*) zero_buf;
 	int i;
 	void* va;
-	for (i = 0; i < num_pages; i++){
-		//check if alloc fails.
+	for (i = 0; i < NUM_REC_DESC; i++){
 		va = (void*)(ZEROCOPY_BASE + i * PGSIZE);
-		if (page_insert(curenv->env_pgdir, pa2page(rx_desc_list[i].addr), va , PTE_P|PTE_U|PTE_W) < 0)
+		if (page_insert(curenv->env_pgdir, pa2page(rx_desc_list[i].addr - sizeof(int)), va , PTE_P|PTE_U|PTE_W) < 0)
 			panic("[e1000] init zerocpy");
 	}
 }
