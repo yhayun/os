@@ -151,8 +151,12 @@ sys_receive_packet(void *container, int* size)
 	return syscall(SYS_receive_packet, 0,(uint32_t)container, (uint32_t)size,0,0,0);
 }
 int
-sys_receive_packet(void *mac_addr)
+sys_get_mac_addr(void *mac_addr)
 {
-	return syscall(SYS_receive_packet, 0,(uint32_t)mac_addr, 0,0,0,0);
+	return syscall(SYS_get_mac_addr, 0,(uint32_t)mac_addr, 0,0,0,0);
 }
-
+int
+sys_zero_receive(char** package)
+{
+	return syscall(SYS_zero_receive, 0,(uint32_t)package, 0,0,0,0);
+}

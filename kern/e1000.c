@@ -1,5 +1,6 @@
 #include <kern/e1000.h>
 #include <kern/sched.h>
+
 // LAB 6: Your driver code here
 volatile uint32_t *e1000;
 
@@ -14,6 +15,7 @@ struct tx_buf tx_buffer[NUM_TRANS_DESC] __attribute__ ((aligned (BUFFER_SIZE)));
 //Receive structures:
 struct rx_desc rx_desc_list[NUM_REC_DESC] __attribute__ ((aligned (16)));
 struct rx_buf rx_buffer[NUM_REC_DESC] __attribute__ ((aligned (BUFFER_SIZE)));
+struct rx_buf* zero_buf;
 
 uint16_t MAC_eeprom[3];
 //**************************************************************************************
@@ -102,8 +104,19 @@ static void init_receive(){
 	//Allocate a region of memory for the receive descriptor list:
 	memset(rx_desc_list, 0, sizeof(struct rx_desc) * NUM_REC_DESC);
 	int i;
-	for (i=0; i < NUM_REC_DESC; i++){
-		rx_desc_list[i].addr = PADDR(&rx_buffer[i]);
+	struct PageInfo* page;
+
+	if (ZERO_COPY_ENABLE){
+		for (i = 0; i < NUM_REC_DESC; i++){
+			page =  page_alloc(ALLOC_ZERO);
+			//we add sizeof(int) to reserve place for the packet size.
+			// this is done to match packet struct for the ipc_send;
+			rx_desc_list[i].addr = page2pa(page) + sizeof(int);
+		}
+	}else{
+		for (i=0; i < NUM_REC_DESC; i++){
+			rx_desc_list[i].addr = PADDR(&rx_buffer[i]);
+		}
 	}
 
 	//Set the Receive Descriptor Length
@@ -182,7 +195,6 @@ int transmit_packet (void* package, int size){
 int receive_packet (void* container, int* size){
 	if (!container)
 		panic("Receive Packet got a null container");
-	int i = 0;
 	int idx = ( e1000[E1000_RDT] + 1) % NUM_REC_DESC;
 	if( !(rx_desc_list[idx].status & E1000_RXD_STAT_DD) ){	
 		//send to sleep on packet - let the system call handle putting us to sleep:
@@ -197,6 +209,56 @@ int receive_packet (void* container, int* size){
 	*size = rx_desc_list[idx].length;
 	return 0;
 }
+
+//**************** ZERO COPY RECEIVE ********************//
+// Unlike the zero copy trans this is a seperated function which we can choose to enable or not
+// depends on the ZERO_COPY_ENABLE flag in the input.c file which starts the receive flow.
+
+//We map the package pointer to point to pre allocated (shared) page instead of copying, the u-env will
+// use this page via the package pointer later on. 
+// we have to take care of mapping the buffer into the curenv (receiving env) addrss space and make sure
+// the buffers are aligned for NIC to use them properly.
+//**********************************************************//
+int zero_receive(char** package){
+	int size;
+	if (!package){
+		init_zero_copy_receive();
+		return 0;
+	}
+
+	int idx = ( e1000[E1000_RDT] + 1) % NUM_REC_DESC;
+	if( !(rx_desc_list[idx].status & E1000_RXD_STAT_DD) ){	
+		//send to sleep on packet - let the system call handle putting us to sleep:
+		return -E_NO_PACKAGE;
+	}
+	if ( !(rx_desc_list[idx].status & E1000_RXD_STAT_EOP) )
+		panic("Receive: Expected only a single pacakge message, not a stream!");
+
+	size = rx_desc_list[idx].length;
+	*package = (char*)(ZEROCOPY_BASE + idx * PGSIZE);
+
+	//we put the size in the previously reserved space so it will look like jif_pkt struct!
+	// jif->size, jif->data:
+	*(*package) = size;
+
+	rx_desc_list[idx].status = 0;
+	e1000[E1000_RDT] = idx; // advance iterator TDT.
+	return size;
+}
+
+
+void init_zero_copy_receive(){
+	int i;
+	void* va;
+	for (i = 0; i < NUM_REC_DESC; i++){
+		va = (void*)(ZEROCOPY_BASE + i * PGSIZE);
+		if (page_insert(curenv->env_pgdir, pa2page(rx_desc_list[i].addr - sizeof(int)), va , PTE_P|PTE_U|PTE_W) < 0)
+			panic("[e1000] init zerocpy");
+	}
+}
+
+
+
 
 
 //Handle receive interrupt by waking up sleeping receivers:

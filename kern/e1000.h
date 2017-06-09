@@ -262,7 +262,7 @@ struct rx_buf
 #define NUM_TRANS_DESC 16
 #define TRANS_DESC_SIZE sizeof(struct tx_desc) * NUM_TRANS_DESC
 #define TRANS_REC_SIZE sizeof(struct rx_desc) * NUM_REC_DESC
-
+#define ZERO_COPY_ENABLE 1
 
 
 //******************************************
@@ -279,6 +279,9 @@ void e1000_trans_handler();
 void read_epprom();
 void set_mac();
 void send_mac(void* mac_addr);
+int zero_receive(char** package);
+void init_zero_copy_receive();
+#define ZEROCOPY_BASE							0x0ffff000 - PTSIZE
 
 #endif	// JOS_KERN_E1000_H
 
