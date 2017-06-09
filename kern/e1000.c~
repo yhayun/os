@@ -14,6 +14,7 @@ struct tx_buf tx_buffer[NUM_TRANS_DESC] __attribute__ ((aligned (BUFFER_SIZE)));
 //Receive structures:
 struct rx_desc rx_desc_list[NUM_REC_DESC] __attribute__ ((aligned (16)));
 struct rx_buf rx_buffer[NUM_REC_DESC] __attribute__ ((aligned (BUFFER_SIZE)));
+struct rx_buf* zero_buf;
 
 uint16_t MAC_eeprom[3];
 //**************************************************************************************
@@ -182,9 +183,7 @@ int transmit_packet (void* package, int size){
 int receive_packet (void* container, int* size){
 	if (!container)
 		panic("Receive Packet got a null container");
-	int i = 0;
 	int idx = ( e1000[E1000_RDT] + 1) % NUM_REC_DESC;
-	for (i; i < 128; i++)if (rx_desc_list[i].status) cprintf("rx_desc_list[i].status %d i = %d \n",rx_desc_list[i].status, i); 
 	if( !(rx_desc_list[idx].status & E1000_RXD_STAT_DD) ){	
 		//send to sleep on packet - let the system call handle putting us to sleep:
 		return -E_NO_PACKAGE;
@@ -198,6 +197,64 @@ int receive_packet (void* container, int* size){
 	*size = rx_desc_list[idx].length;
 	return 0;
 }
+
+//**************** ZERO COPY RECEIVE ********************//
+// Unlike the zero copy trans this is a seperated function which we can choose to enable or not
+// depends on the ZERO_COPY_ENABLE flag in the input.c file which starts the receive flow.
+
+//We map the package pointer to point to pre allocated (shared) page instead of copying, the u-env will
+// use this page via the package pointer later on. 
+// we have to take care of mapping the buffer into the curenv (receiving env) addrss space and make sure
+// the buffers are aligned for NIC to use them properly.
+//**********************************************************//
+int zero_receive(char** package){
+	int size;
+
+	//flag to override the normal init if we get here the first time - (using zero copy).
+	static int initialized;
+	if (!initialized)
+	{
+		init_zero_copy_receive();
+		//next to we enter the function, we won't init again.
+		initialized = 1;
+	}
+
+
+	int idx = ( e1000[E1000_RDT] + 1) % NUM_REC_DESC;
+	if( !(rx_desc_list[idx].status & E1000_RXD_STAT_DD) ){	
+		//send to sleep on packet - let the system call handle putting us to sleep:
+		return -E_NO_PACKAGE;
+	}
+	if ( !(rx_desc_list[idx].status & E1000_RXD_STAT_EOP) )
+		panic("Receive: Expected only a single pacakge message, not a stream!");
+
+	size = rx_desc_list[idx].length;
+cprintf("----first idx: %d\n",idx);
+	*package = (char*)(ZEROCOPY_BASE + idx * PGSIZE);
+	rx_desc_list[idx].status = 0;
+	e1000[E1000_RDT] = idx; // advance iterator TDT.
+	return size;
+}
+
+
+void init_zero_copy_receive(){
+	int num_pages = NUM_REC_DESC;
+	char *buf_base = (char*) zero_buf;
+	int i;
+	struct PageInfo* page;
+	void* va;
+	for (i = 0; i < num_pages; i++){
+		page =  page_alloc(PTE_P|PTE_U|PTE_W);
+		//check if alloc fails.
+		rx_desc_list[i].addr = page2pa(page);
+		va = (void*)(ZEROCOPY_BASE + i * PGSIZE);
+		if (page_insert(curenv->env_pgdir, page, va , PTE_P|PTE_U|PTE_W) < 0)
+			panic("[e1000] init zerocpy");
+	}
+}
+
+
+
 
 
 //Handle receive interrupt by waking up sleeping receivers:
@@ -229,7 +286,6 @@ void e1000_rec_handler(){
 
 
 void e1000_trans_handler(){
-cprintf("Hello!   2  !!\n\n");
 	int i = 0;
 	struct Env* target = NULL;
 	//Look for a receiving env in all of the envs:

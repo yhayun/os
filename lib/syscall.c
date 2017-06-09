@@ -155,4 +155,8 @@ sys_get_mac_addr(void *mac_addr)
 {
 	return syscall(SYS_get_mac_addr, 0,(uint32_t)mac_addr, 0,0,0,0);
 }
-
+int
+sys_zero_receive(char** package)
+{
+	return syscall(SYS_zero_receive, 0,(uint32_t)package, 0,0,0,0);
+}

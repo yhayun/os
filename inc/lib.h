@@ -65,7 +65,9 @@ int 	sys_get_priority(void);
 int 	sys_exec(unsigned char* binary, uint32_t stack_ptr);
 int 	sys_send_packet(void *buffer, int size);
 int	sys_receive_packet(void *container, int* size);
+//lab 6 challenges:
 int     sys_get_mac_addr(void* mac_addr);
+int 	sys_zero_receive(char** package);
 
 
 // This must be inlined.  Exercise for reader: why?

@@ -522,7 +522,7 @@ sys_receive_packet(void *container, int* size)
 	if(res == 0 ){
 		curenv->env_e1000_rec = false;
 		return 0;
-	}else{//cprintf("going to sleep \n\n");
+	}else{
 		curenv->env_status = ENV_NOT_RUNNABLE;
 		curenv->env_e1000_rec = true;
 		curenv->env_tf.tf_regs.reg_eax = res;
@@ -533,12 +533,32 @@ sys_receive_packet(void *container, int* size)
 }
 
 
-int
+static int
 sys_get_mac_addr(void* mac_addr){
 	user_mem_assert(curenv, mac_addr, 12, PTE_W);
 	send_mac(mac_addr);
 	return 0;
 }
+
+
+//*** ZERO COPY RECEIVE - lab6 challenge: **//
+static int
+sys_zero_receive(char** package){
+	//this handled inside e1000 driver.
+	int res = zero_receive(package);
+	if ( res < 0 ){
+		curenv->env_status = ENV_NOT_RUNNABLE;
+		curenv->env_e1000_rec = true;
+		curenv->env_tf.tf_regs.reg_eax = res;
+		sys_yield();//wake up to try again.
+	}
+	//succeeded, returns res = size of packet.
+	curenv->env_e1000_rec = false;
+	return res;	
+	
+}
+
+
 
 
 
@@ -595,6 +615,8 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 		return sys_receive_packet((void *)a1, (int*)a2);
 	case SYS_get_mac_addr:
 		return sys_get_mac_addr((void *)a1);
+	case SYS_zero_receive:
+		return sys_zero_receive((char**) a1);
 	default:
 		return -E_INVAL;
 	}
