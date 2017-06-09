@@ -23,7 +23,7 @@ output(envid_t ns_envid)
 			cprintf("Warning: Received packet from unkown source, packet dumped.");
 			continue;
 		}
-		r = sys_send_packet( pkt->pkt.jp_data, pkt->pkt.jp_len);cprintf("\n\n\nAFTER SYSCALL\n\n\n");
+		r = sys_send_packet( pkt->pkt.jp_data, pkt->pkt.jp_len);
 		if(r == -E_INVAL){
 			cprintf("Warning: Packet size too big or null buffer");
 			continue;

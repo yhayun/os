@@ -1,5 +1,5 @@
 #include <kern/e1000.h>
-
+#include <kern/sched.h>
 // LAB 6: Your driver code here
 volatile uint32_t *e1000;
 
@@ -127,28 +127,51 @@ static void init_receive(){
 
 }
 
-
-
+//**************** ZERO COPY TRANSMIT ********************//
+//ZERO COPY - will use walkpgdir to get the user envs pte for the
+//buffer. then it will use it to get to the physcall address of 
+// the pacakge and use it as the buffer for transmit. without copying.
+// we need to make sure we don't resume the user env until copy is
+// done otherwise it might change the buffer while transmit is working!
+//**********************************************************//
 // Returns 0 on success.
 // Returns -1 when sender needs to try again.
 int transmit_packet (void* package, int size){
 	if( size > BUFFER_SIZE )
 		panic("Transmit packet received size bigger than BUFFER");
-	if (!package)
+	if(!package)
 		panic("Transmit Packet got a null package");
 	int cur_desc = e1000[E1000_TDT];
 
 	if( !(tx_desc_list[cur_desc].status & E1000_TXD_STAT_DD) ){	
 		return -1;//the queue is full - let sender know to try again.
 	}
+	
+	//normal copying code:
+	//--------------------
+	//uint32_t addr = tx_desc_list[cur_desc].addr;
+	//memcpy((void*)(KADDR(addr)) ,package, size);
 
-	uint32_t addr = tx_desc_list[cur_desc].addr;
-	memcpy((void*)(KADDR(addr)) ,package, size);
+	//zero-copy:
+	//-------------
+	//get physical addr of package:
+	physaddr_t addr = (PTE_ADDR(*pgdir_walk(curenv->env_pgdir,package,0)) + PGOFF(package));
+	//point descriptor to the pacakge phys addr 
+	tx_desc_list[cur_desc].addr = addr;	
+
+
 	tx_desc_list[cur_desc].status &=  ~E1000_TXD_STAT_DD;//mark used.
 	tx_desc_list[cur_desc].length = size;
 	tx_desc_list[cur_desc].cmd |= E1000_TXD_EOP;
 
 	e1000[E1000_TDT] = ( cur_desc + 1) % NUM_TRANS_DESC; // advance iterator TDT.
+	
+	//make u-env sleep(yet runnnable) until the package is sent to it won't touch package mid transmit:
+	while ( !(tx_desc_list[cur_desc].status & E1000_TXD_STAT_DD) ){
+		sched_yield();
+	}
+
+
 	return 0;
 }
 
@@ -161,7 +184,6 @@ int receive_packet (void* container, int* size){
 		panic("Receive Packet got a null container");
 	int i = 0;
 	int idx = ( e1000[E1000_RDT] + 1) % NUM_REC_DESC;
-	for (i; i < 128; i++)if (rx_desc_list[i].status) cprintf("rx_desc_list[i].status %d i = %d \n",rx_desc_list[i].status, i); 
 	if( !(rx_desc_list[idx].status & E1000_RXD_STAT_DD) ){	
 		//send to sleep on packet - let the system call handle putting us to sleep:
 		return -E_NO_PACKAGE;
@@ -176,9 +198,9 @@ int receive_packet (void* container, int* size){
 	return 0;
 }
 
+
 //Handle receive interrupt by waking up sleeping receivers:
 void e1000_rec_handler(){
-cprintf("Hello!!!\n\n");
 	int i = 0;
 	struct Env* target = NULL;
 
@@ -206,7 +228,6 @@ cprintf("Hello!!!\n\n");
 
 
 void e1000_trans_handler(){
-cprintf("Hello!   2  !!\n\n");
 	int i = 0;
 	struct Env* target = NULL;
 	//Look for a receiving env in all of the envs:
