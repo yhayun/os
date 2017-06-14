@@ -301,7 +301,7 @@ trap_dispatch(struct Trapframe *tf)
 		serial_intr();
 		break;
 	case IRQ_OFFSET+IRQ_E1000_TRANS:
-		e1000_rec_handler();
+		e1000_trans_handler();
 		break;
 	case IRQ_OFFSET+IRQ_E1000_REC:
 		e1000_rec_handler();

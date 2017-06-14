@@ -568,7 +568,7 @@ sys_zero_receive(char** package){
 // the called function will handle warnings and console prints.
 static int
 sys_ip_filter(uint32_t src_ip, uint32_t dst_ip, int protocol){
-	return 0;
+	return 1;
 	//return check_packet(src_ip, dst_ip, protocol);
 }
 
