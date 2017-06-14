@@ -195,11 +195,11 @@ ip_input(struct pbuf *p, struct netif *inp)
 
   /* identify the IP header */
   iphdr = p->payload;
-//******************************yhayun****************************************
-// lab 6 added code - ip filtering challenge:
-sys_ip_filter((iphdr->src).addr, (iphdr->dest).addr,  IPH_PROTO(iphdr));
-// end of lab6 added code
-//******************************yhayun****************************************
+//****************
+//----test:
+sys_ip_filter((iphdr->src).addr, (iphdr->dest).addr,  IPH_PROTO(iphdr) );
+//----test
+//***************
   if (IPH_V(iphdr) != 4) {
     LWIP_DEBUGF(IP_DEBUG | 1, ("IP packet dropped due to bad version number %"U16_F"\n", IPH_V(iphdr)));
     ip_debug_print(p);

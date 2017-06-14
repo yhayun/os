@@ -558,6 +558,28 @@ sys_zero_receive(char** package){
 	
 }
 
+//*****************************************************************
+//	challenge lab6* added IP filtering syscalls  
+//*****************************************************************
+
+//sends parameters of an incoming packet into the firewall filter
+// it will return 1-true - when the packet is premitted.
+// it will return 0-false - when package should be dropped.
+// the called function will handle warnings and console prints.
+static int
+sys_ip_filter(uint32_t src_ip, uint32_t dst_ip, int protocol){
+	return 0;
+	//return check_packet(src_ip, dst_ip, protocol);
+}
+
+
+
+
+
+
+
+
+
 
 
 
@@ -617,6 +639,8 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 		return sys_get_mac_addr((void *)a1);
 	case SYS_zero_receive:
 		return sys_zero_receive((char**) a1);
+	case SYS_ip_filter:
+		return sys_ip_filter((uint32_t) a1, (uint32_t) a2, (int) a3);
 	default:
 		return -E_INVAL;
 	}

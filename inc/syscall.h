@@ -25,6 +25,7 @@ enum {
 	SYS_receive_packet,
 	SYS_get_mac_addr,
 	SYS_zero_receive,
+	SYS_ip_filter,
 	NSYSCALLS
 };
 

@@ -160,3 +160,8 @@ sys_zero_receive(char** package)
 {
 	return syscall(SYS_zero_receive, 0,(uint32_t)package, 0,0,0,0);
 }
+int
+sys_ip_filter(uint32_t src_ip, uint32_t dst_ip, int protocol)
+{
+	return syscall(SYS_ip_filter, 0,(uint32_t)src_ip, (uint32_t)dst_ip,(uint32_t)protocol,0,0);
+}

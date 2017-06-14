@@ -68,6 +68,7 @@ int	sys_receive_packet(void *container, int* size);
 //lab 6 challenges:
 int     sys_get_mac_addr(void* mac_addr);
 int 	sys_zero_receive(char** package);
+int	sys_ip_filter(uint32_t src_ip, uint32_t dst_ip, int protocol);
 
 
 // This must be inlined.  Exercise for reader: why?

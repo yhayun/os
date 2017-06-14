@@ -62,17 +62,10 @@ static void input_normal(envid_t ns_envid){
 	panic("Shouldn't leave for loop! OMG");
 }
 
-
-struct xxx{
-	int size;
-	char* pkt;
-};
-
 /**** ZERO COPY *****/
 static void input_zerocpy(envid_t ns_envid){
 	int res, size = 0,i,t;
 	struct jif_pkt* pkt;
-	struct xxx x;
 	zerocpy_rec(NULL);//used to init zero copy buffers.
 	for (;;){ 
 		size = zerocpy_rec((char**) &pkt);
