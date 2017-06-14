@@ -195,11 +195,22 @@ ip_input(struct pbuf *p, struct netif *inp)
 
   /* identify the IP header */
   iphdr = p->payload;
+
 //******************************yhayun****************************************
 // lab 6 added code - ip filtering challenge:
-sys_ip_filter((iphdr->src).addr, (iphdr->dest).addr,  IPH_PROTO(iphdr));
+int not_filtered = sys_ip_filter((iphdr->src).addr, (iphdr->dest).addr,  IPH_PROTO(iphdr));
+  if (not_filtered != 1) {
+    LWIP_DEBUGF(IP_DEBUG | 1, ("IP packet dropped due to IP FILTERING!"));
+    ip_debug_print(p);
+    pbuf_free(p);
+    IP_STATS_INC(ip.err);
+    IP_STATS_INC(ip.drop);
+    snmp_inc_ipinhdrerrors();
+    return ERR_OK;
+  }
 // end of lab6 added code
 //******************************yhayun****************************************
+
   if (IPH_V(iphdr) != 4) {
     LWIP_DEBUGF(IP_DEBUG | 1, ("IP packet dropped due to bad version number %"U16_F"\n", IPH_V(iphdr)));
     ip_debug_print(p);
