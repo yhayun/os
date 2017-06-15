@@ -300,11 +300,11 @@ trap_dispatch(struct Trapframe *tf)
 	case IRQ_OFFSET+IRQ_SERIAL:
 		serial_intr();
 		break;
-	case IRQ_OFFSET+IRQ_E1000_REC:
-		e1000_rec_handler();
-		break;
 	case IRQ_OFFSET+IRQ_E1000_TRANS:
-		e1000_rec_handler();
+		e1000_trans_handler();
+		break;
+	case IRQ_OFFSET+IRQ_E1000_REC:
+		e1000_trans_handler();
 		break;
 	default:
 		// Unexpected trap: The user process or the kernel has a bug.
