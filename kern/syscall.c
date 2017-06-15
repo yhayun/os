@@ -567,19 +567,10 @@ sys_zero_receive(char** package){
 // it will return 0-false - when package should be dropped.
 // the called function will handle warnings and console prints.
 static int
-sys_ip_filter(uint32_t src_ip, uint32_t dst_ip, int protocol){
-	return 0;
-	//return check_packet(src_ip, dst_ip, protocol);
+sys_ip_filter(uint32_t src_ip, uint32_t dst_ip, int protocol)
+{
+	return check_packet(src_ip, dst_ip, protocol);
 }
-
-
-
-
-
-
-
-
-
 
 
 

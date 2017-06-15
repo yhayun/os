@@ -8,6 +8,7 @@
 #include <kern/env.h>
 #include <kern/picirq.h>
 
+
 #define E1000_VENDOR_ID 0x8086
 #define E1000_DEVICE_ID 0x100E
 
@@ -282,6 +283,96 @@ void send_mac(void* mac_addr);
 int zero_receive(char** package);
 void init_zero_copy_receive();
 #define ZEROCOPY_BASE							0x0ffff000 - PTSIZE
+
+
+
+//**************************************************************************
+//			FILTER implementions 
+//**************************************************************************
+
+//*****************************************************************************************
+// 					defines for filtering
+//*****************************************************************************************
+
+//LIST OF PROTOCOLS
+#define		ICMP	1
+#define		IGMP	2
+#define		TCP	6
+#define		UDP	17
+#define		ENCAP	41
+#define		OSPF	89
+#define 	SCTP	132
+//
+
+#define		RANGE_ALL	0
+#define		RANGE_ONE	1	// check only or first byte
+#define		RANGE_TWO	2	// check for two bytes
+#define		RANGE_THREE	3 	// check for three bytes
+#define		RANGE_FOUR	4	// check for specific ip
+
+
+#define ip4_addr1(addr) ((uint16_t)((addr) >> 24) & 0xff)
+#define ip4_addr2(addr) ((uint16_t)((addr) >> 16) & 0xff)
+#define ip4_addr3(addr) ((uint16_t)((addr) >> 8) & 0xff)
+#define ip4_addr4(addr) ((uint16_t)(addr) & 0xff)
+
+
+//*****************************************************************************************
+// 					structs for filtering
+//*****************************************************************************************
+
+enum {
+	VALUE_ANY,
+	DIRECTION_IN,
+	DIRECTION_OUT,
+};
+
+enum {
+	ACTION_DENAY,
+	ACTION_APPROVE,
+	ACTION_DEN_WARN
+};
+
+/** explanation of the fields -
+** name - the name of the rule ( for printing and giving meaning to the rules
+** direction - IN_GOING or OUT_GOING packet.
+** src_ip - the source ip of the package.
+** dst_ip - the destination of the package
+** range - can get five values - 
+** 	RANGE_ALL - the IP addr of the rules will be ANY IP (iggnoring the src and dst)
+** 	RANGE_ONE - the IP addrs will be examine only by the widest domain 
+** 	RANGE_TWO - the IP addrs will be examine by the two leftmost numbers.
+** 	RANGE_THREE - the IP addrs will be examine by the three leftmost numbers.
+** 	RANGE_FOUR - the IP will be examined by the exact IP addr
+** protocol - gets the protocol the rules applies two. in the define section you can see a list of protocols
+** action - can get the action todo for a rule match - APPROVE - the package is okay. DENAY - drop the package.
+**	    DEN_WARN - tell the user to drop the package but pring out warnings.
+**/
+struct rule{
+	char *name;
+	int direction;
+	uint32_t src_ip;
+	uint32_t dst_ip;
+	int range;
+	int protocol;
+	int action;
+};
+
+//*****************************************************************************************
+// 					funcs decl
+//*****************************************************************************************
+
+
+
+/**
+** this function is the "main" function of the packet filterer. it gets the feilds to examine from the packet.
+** src_ip - the source where the packet came from
+** dst_ip - where the packet is going to. if incoming package- dst ip is PROBABLY for us. if out going message
+** src_ip is ours. the protocol represent the protocol of the package (TCP, UDP , etc). 
+** return true ( ACTION_APPROVE) for good backage or false (ACTION_DENAY) for bad package. 
+** Note- this function DOES NOT do the dropping of packages, only determining if it follows our rules or not.
+**/
+int check_packet(uint32_t src_ip, uint32_t dst_ip, int protocol);
 
 #endif	// JOS_KERN_E1000_H
 
