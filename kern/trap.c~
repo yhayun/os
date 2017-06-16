@@ -141,7 +141,6 @@ trap_init(void)
 
 	//LAB6 ADDED INTERRUPTS:
 	SETGATE(idt[IRQ_E1000_REC + IRQ_OFFSET], 0, GD_KT, t_irq_e1000_rec, 0);
-	SETGATE(idt[IRQ_E1000_TRANS + IRQ_OFFSET], 0, GD_KT, t_irq_e1000_trans, 0);
 
 	// Per-CPU setup 
 	trap_init_percpu();
@@ -300,11 +299,8 @@ trap_dispatch(struct Trapframe *tf)
 	case IRQ_OFFSET+IRQ_SERIAL:
 		serial_intr();
 		break;
-	case IRQ_OFFSET+IRQ_E1000_TRANS:
-		e1000_trans_handler();
-		break;
 	case IRQ_OFFSET+IRQ_E1000_REC:
-		e1000_trans_handler();
+		e1000_interrupt_handler();
 		break;
 	default:
 		// Unexpected trap: The user process or the kernel has a bug.

@@ -277,12 +277,24 @@ static void init_transmit();
 static void init_receive();
 void e1000_rec_handler();
 void e1000_trans_handler();
+void e1000_interrupt_handler();
 void read_epprom();
 void set_mac();
 void send_mac(void* mac_addr);
 int zero_receive(char** package);
 void init_zero_copy_receive();
 #define ZEROCOPY_BASE							0x0ffff000 - PTSIZE
+
+
+
+
+
+
+
+
+
+
+
 
 
 

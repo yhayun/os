@@ -294,6 +294,7 @@ void init_zero_copy_receive();
 // 					defines for filtering
 //*****************************************************************************************
 
+//LIST OF PROTOCOLS
 #define		ICMP	1
 #define		IGMP	2
 #define		TCP	6
@@ -301,7 +302,7 @@ void init_zero_copy_receive();
 #define		ENCAP	41
 #define		OSPF	89
 #define 	SCTP	132
-
+//
 
 #define		RANGE_ALL	0
 #define		RANGE_ONE	1	// check only or first byte
@@ -338,7 +339,14 @@ enum {
 ** src_ip - the source ip of the package.
 ** dst_ip - the destination of the package
 ** range - can get five values - 
-**
+** 	RANGE_ALL - the IP addr of the rules will be ANY IP (iggnoring the src and dst)
+** 	RANGE_ONE - the IP addrs will be examine only by the widest domain 
+** 	RANGE_TWO - the IP addrs will be examine by the two leftmost numbers.
+** 	RANGE_THREE - the IP addrs will be examine by the three leftmost numbers.
+** 	RANGE_FOUR - the IP will be examined by the exact IP addr
+** protocol - gets the protocol the rules applies two. in the define section you can see a list of protocols
+** action - can get the action todo for a rule match - APPROVE - the package is okay. DENAY - drop the package.
+**	    DEN_WARN - tell the user to drop the package but pring out warnings.
 **/
 struct rule{
 	char *name;

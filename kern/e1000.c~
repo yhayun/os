@@ -20,7 +20,7 @@ struct rx_buf* zero_buf;
 // this sturcture is for our own challange. PACKET FILTERER.
 struct rule rules[] = {
 	{"block rule", VALUE_ANY, 0x0202000a, 0xf02000a, RANGE_FOUR, TCP, ACTION_APPROVE}, 
-	{"default", VALUE_ANY, VALUE_ANY, VALUE_ANY, VALUE_ANY, VALUE_ANY, ACTION_DENAY},
+	{"default", VALUE_ANY, VALUE_ANY, VALUE_ANY, VALUE_ANY, VALUE_ANY, ACTION_APPROVE},
 };
 
 
@@ -48,7 +48,7 @@ pci_vendor_attach(struct pci_func *pcif)
 	init_receive();
 	
 	// Enable Interrupts:
-	//e1000[E1000_IMS] |= E1000_ICR_TXQE;//transmit queue emptry.
+	e1000[E1000_IMS] |= E1000_ICR_TXQE;//transmit queue emptry.
 	e1000[E1000_IMS] |= E1000_ICR_RXT0;//Receive time - for receive queue full
 
 	return 0;
@@ -268,6 +268,22 @@ void init_zero_copy_receive(){
 
 
 
+void e1000_interrupt_handler(){
+	int reg = e1000[E1000_ICR];
+	if (reg & E1000_ICR_RXT0){
+		e1000_rec_handler();
+	}
+	if(reg & E1000_ICR_TXQE){
+		e1000_trans_handler();	
+	}
+
+}
+
+
+
+
+
+
 //Handle receive interrupt by waking up sleeping receivers:
 void e1000_rec_handler(){
 	int i = 0;
@@ -440,22 +456,21 @@ static int ip_cmp(int rule_num, uint32_t head_ip,uint32_t rule_ip)
 {
 
 	switch (rules[rule_num].range){
-	case RANGE_ALL :		cprintf("src - %x, dst - %x \n", head_ip, rule_ip);
+	case RANGE_ALL :
 		return 1;
-	case RANGE_ONE :		cprintf("src - %x, dst - %x \n", head_ip, rule_ip);
+	case RANGE_ONE :
 		if ( ip4_addr1(head_ip) == ip4_addr1(rule_ip) )
 			return 1;
 		break;
-	case RANGE_TWO :		cprintf("src - %x, dst - %x \n", head_ip, rule_ip);
+	case RANGE_TWO :
 		if ( ip4_addr1(head_ip) == ip4_addr1(rule_ip) && ip4_addr2(head_ip) == ip4_addr2(rule_ip) )
 			return 1;
 		break;
-	case RANGE_THREE :		cprintf("src - %x, dst - %x \n", head_ip, rule_ip);
+	case RANGE_THREE :
 		if ( ip4_addr1(head_ip) == ip4_addr1(rule_ip) && ip4_addr2(head_ip) == ip4_addr2(rule_ip) && ip4_addr3(head_ip) == ip4_addr3(rule_ip) )
 			return 1;
 		break;
 	case RANGE_FOUR :
-		cprintf("src - %x, dst - %x \n", head_ip, rule_ip);
 		if ( ip4_addr1(head_ip) == ip4_addr1(rule_ip) && ip4_addr2(head_ip) == ip4_addr2(rule_ip) &&
 								 ip4_addr3(head_ip) == ip4_addr3(rule_ip) && ip4_addr4(head_ip) == ip4_addr4(rule_ip) )
 			return 1;

@@ -48,7 +48,7 @@ pci_vendor_attach(struct pci_func *pcif)
 	init_receive();
 	
 	// Enable Interrupts:
-	//e1000[E1000_IMS] |= E1000_ICR_TXQE;//transmit queue emptry.
+	e1000[E1000_IMS] |= E1000_ICR_TXQE;//transmit queue emptry.
 	e1000[E1000_IMS] |= E1000_ICR_RXT0;//Receive time - for receive queue full
 
 	return 0;
@@ -263,6 +263,23 @@ void init_zero_copy_receive(){
 			panic("[e1000] init zerocpy");
 	}
 }
+
+
+
+
+
+void e1000_interrupt_handler(){
+	//calls the corresponding interrupt handlers.
+	int reg = e1000[E1000_ICR];
+	if (reg & E1000_ICR_RXT0){
+		e1000_rec_handler();
+	}
+	if(reg & E1000_ICR_TXQE){
+		e1000_trans_handler();	
+	}
+
+}
+
 
 
 
