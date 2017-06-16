@@ -187,9 +187,9 @@ int transmit_packet (void* package, int size){
 	e1000[E1000_TDT] = ( cur_desc + 1) % NUM_TRANS_DESC; // advance iterator TDT.
 	
 	//make u-env sleep(yet runnnable) until the package is sent to it won't touch package mid transmit:
-	while ( !(tx_desc_list[cur_desc].status & E1000_TXD_STAT_DD) ){
+	//while ( !(tx_desc_list[cur_desc].status & E1000_TXD_STAT_DD) ){
 		sched_yield();
-	}
+	//}
 
 
 	return 0;
@@ -269,6 +269,7 @@ void init_zero_copy_receive(){
 
 
 void e1000_interrupt_handler(){
+	//calls the corresponding interrupt handlers.
 	int reg = e1000[E1000_ICR];
 	if (reg & E1000_ICR_RXT0){
 		e1000_rec_handler();
