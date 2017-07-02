@@ -491,15 +491,13 @@ sys_send_packet(void *buffer, int size)
 {
 	user_mem_assert(curenv, buffer, size , PTE_W|PTE_P);
 	if (!buffer || size > BUFFER_SIZE)
-		return -E_INVAL;
+		return 0;//does nothing.
 	int res = transmit_packet(buffer,size);
-	while ( res < 0){
+	if ( res < 0){
 		curenv->env_status = ENV_NOT_RUNNABLE;
 		curenv->env_e1000_trans = true;
-		curenv->env_tf.tf_regs.reg_eax = 0;
+		curenv->env_tf.tf_regs.reg_eax = -1;
 		sched_yield();
-		//woke up - try again:
-		res = transmit_packet(buffer,size);
 	}
 
 	curenv->env_e1000_trans = false;
@@ -511,7 +509,7 @@ sys_send_packet(void *buffer, int size)
 //size will receive the incoming packet size.
 //return 0 on success
 // returns -E_INVAL if parameters are invalid. 
-static int
+static int 
 sys_receive_packet(void *container, int* size)
 {
 	user_mem_assert(curenv, container, BUFFER_SIZE , PTE_P);

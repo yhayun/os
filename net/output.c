@@ -24,9 +24,8 @@ output(envid_t ns_envid)
 			continue;
 		}
 		r = sys_send_packet( pkt->pkt.jp_data, pkt->pkt.jp_len);
-		if(r == -E_INVAL){
-			cprintf("Warning: Packet size too big or null buffer");
-			continue;
+		while(r < 0){
+			r = sys_send_packet( pkt->pkt.jp_data, pkt->pkt.jp_len);		
 		}
 	}
 	panic("Shouldn't leave for loop! OMG");

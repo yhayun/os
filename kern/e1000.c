@@ -166,7 +166,7 @@ int transmit_packet (void* package, int size){
 	if( !(tx_desc_list[cur_desc].status & E1000_TXD_STAT_DD) ){	
 		return -1;//the queue is full - let sender know to try again.
 	}
-	
+
 	//normal copying code:
 	//--------------------
 	//uint32_t addr = tx_desc_list[cur_desc].addr;
@@ -185,12 +185,8 @@ int transmit_packet (void* package, int size){
 	tx_desc_list[cur_desc].cmd |= E1000_TXD_EOP;
 
 	e1000[E1000_TDT] = ( cur_desc + 1) % NUM_TRANS_DESC; // advance iterator TDT.
-	
-	//make u-env sleep(yet runnnable) until the package is sent to it won't touch package mid transmit:
-	while ( !(tx_desc_list[cur_desc].status & E1000_TXD_STAT_DD) ){
-		sched_yield();
-	}
 
+	//make u-env sleep(yet runnnable) until the package is sent to it won't touch package mid transmit:
 
 	return 0;
 }
